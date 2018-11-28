@@ -3,11 +3,9 @@
 #include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
-#include<linux/string.h>
 #include <linux/semaphore.h>
-#include <linux/slab.h>
-#include <linux/moduleparam.h>
 #include <linux/uaccess.h>
+#include <linux/slab.h>
 
 
 #define DEVICE_NAME "numpipe"
@@ -25,9 +23,9 @@ struct semaphore full;
 struct semaphore empty;
 static int majorNumber;
 int * bufferQueue;
-int buffSize = 100;
+int bufferSize = 100;
 static int currentSize = 0;
-module_param(buffSize, int, 0);
+module_param(bufferSize, int, 0);
 
 static int num_pipe_init_module(void);
 // static char * char_devnode(struct device *, umode_t *) {
@@ -39,6 +37,7 @@ static ssize_t num_pipe_write(struct file *, const char *, size_t, loff_t *);
 static struct class *  numpipeClass = NULL;
 static struct device * numpipeDevice = NULL;
 
+// file operations of the character device
 static struct file_operations fops = {
     .owner = THIS_MODULE,
     .open = num_pipe_open,
@@ -48,6 +47,7 @@ static struct file_operations fops = {
 };
 
 static int __init num_pipe_init_module(void) {
+    // stuff to do before setting semaphores
     printk(KERN_INFO "NUMPIPE: INIT NUMPIPE\n");
     majorNumber = register_chrdev(0, DEVICE_NAME, &fops);
     if (majorNumber < 0) {
@@ -72,14 +72,15 @@ static int __init num_pipe_init_module(void) {
         printk(KERN_ALERT "Failed to create the device\n");
         return PTR_ERR(numpipeDevice);
     }
-    printk(KERN_INFO "NUMPIPE: device class created correctly\n"); // Made it! device was initialized
+    printk(KERN_ALERT "NUMPIPE: device class created correctly\n"); // Made it! device was initialized
+    // stuff done
 
     // Module config
     sema_init(&full, 0);
-    sema_init(&empty, buffSize);
+    sema_init(&empty, bufferSize);
     sema_init(&mut, 1);
-    bufferQueue = kmalloc(buffSize * sizeof(int), GFP_KERNEL); // Allocate Kernel ram
-    
+    bufferQueue = kmalloc(bufferSize * sizeof(int), GFP_KERNEL); // Allocate Kernel ram
+
     return 0;
 }
 
@@ -99,8 +100,8 @@ static void __exit num_pipe_exit_module(void) {
     class_unregister(numpipeClass);
     class_destroy(numpipeClass);
     unregister_chrdev(majorNumber, DEVICE_NAME);
-    kfree(bufferQueue); 
-    printk(KERN_INFO "DOBBY IS FREE!");
+    kfree(bufferQueue);
+    printk(KERN_ALERT "DOBBY IS FREE!");
 }
 
 static int num_pipe_open(struct inode * inodep, struct file * filep) {
@@ -120,12 +121,12 @@ static ssize_t num_pipe_read(struct file * filep, char * buffer, size_t len, lof
         printk(KERN_INFO "NUMPIPE: Can only read sizeof(int) no. of bytes");
         return -1;
     }
-    if (down_interruptible(&full) != 0) { // Trying to remove one int    
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
+    if (down_interruptible(&full) != 0) { // Trying to remove one int
+        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
         return -1;
     }
     if (down_interruptible(&mut) != 0) { // Entering critical region
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
+        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
         return -1;
     }
     // Entered
@@ -150,12 +151,12 @@ static ssize_t num_pipe_write(struct file * filep, const char * buffer, size_t l
         printk(KERN_INFO "NUMPIPE: Can only write sizeof(int) no. of bytes");
         return -1;
     }
-    if (down_interruptible(&empty) != 0) { // Trying to remove one int    
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
+    if (down_interruptible(&empty) != 0) { // Trying to remove one int
+        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
         return -1;
     }
     if (down_interruptible(&mut) != 0) { // Entering critical region
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
+        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
         return -1;
     }
     couldnt_write = copy_from_user(bufferQueue + currentSize, buffer, sizeof(int));
@@ -164,12 +165,11 @@ static ssize_t num_pipe_write(struct file * filep, const char * buffer, size_t l
         return -1;
     }
     currentSize += 1;
-    up(&mut);
+    up(&mut); // critical section is done now
     up(&full); // filled one more
     return sizeof(int);
 }
 
 module_init(num_pipe_init_module);
 module_exit(num_pipe_exit_module);
-
 
