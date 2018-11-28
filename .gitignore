@@ -3,3 +3,14 @@
 *.tmp/
 *.o
 *.ko
+*.o
+*~ core 
+.depend 
+.*.cmd 
+*.ko 
+*.mod.c 
+.tmp_versions 
+producer_numbers 
+consumer_numbers 
+*.symvers 
+*.order
