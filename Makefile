@@ -19,10 +19,8 @@ modules:
 modules_install:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 
-producer: producer_numbers.c
+pc: producer_numbers.c consumer_numbers.c
 	gcc -o producer_numbers producer_numbers.c
-
-consumer: consumer_numbers.c
 	gcc -o consumer_numbers consumer_numbers.c
 
 clean:
