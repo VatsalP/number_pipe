@@ -19,8 +19,14 @@ modules:
 modules_install:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 
+producer: producer_numbers.c
+	gcc -o producer_numbers producer_numbers.c
+
+consumer: consumer_numbers.c
+	gcc -o consumer_numbers consumer_numbers.c
+
 clean:
-	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions
+	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions producer_numbers consumer_numbers *.symvers *.order
 
 .PHONY: modules modules_install clean
 

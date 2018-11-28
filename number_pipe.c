@@ -5,10 +5,9 @@
 #include <linux/fs.h>
 #include<linux/string.h>
 #include <linux/semaphore.h>
-#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/moduleparam.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 
 #define DEVICE_NAME "numpipe"
@@ -21,13 +20,13 @@ MODULE_VERSION("0.1");
 
 
 // Stuff
-struct mutex mut;
+struct semaphore mut;
 struct semaphore full;
 struct semaphore empty;
 static int majorNumber;
 int * bufferQueue;
 int buffSize = 100;
-// static int currentSize = 0;
+static int currentSize = 0;
 module_param(buffSize, int, 0);
 
 static int num_pipe_init_module(void);
@@ -78,8 +77,8 @@ static int __init num_pipe_init_module(void) {
     // Module config
     sema_init(&full, 0);
     sema_init(&empty, buffSize);
-    mutex_init(&mut);
-    bufferQueue = kmalloc(buffSize * sizeof(int), GFP_KERNEL) // Allocate Kernel ram
+    sema_init(&mut, 1);
+    bufferQueue = kmalloc(buffSize * sizeof(int), GFP_KERNEL); // Allocate Kernel ram
     
     return 0;
 }
@@ -100,7 +99,7 @@ static void __exit num_pipe_exit_module(void) {
     class_unregister(numpipeClass);
     class_destroy(numpipeClass);
     unregister_chrdev(majorNumber, DEVICE_NAME);
-    kfree(buffer); 
+    kfree(bufferQueue); 
     printk(KERN_INFO "DOBBY IS FREE!");
 }
 
@@ -115,42 +114,59 @@ static int num_pipe_release(struct inode * inodep, struct file * filep) {
 }
 
 static ssize_t num_pipe_read(struct file * filep, char * buffer, size_t len, loff_t * offset) {
+    int i = 0;
+    int couldnt_read;
+    if (len != sizeof(int)) {
+        printk(KERN_INFO "NUMPIPE: Can only read sizeof(int) no. of bytes");
+        return -1;
+    }
     if (down_interruptible(&full) != 0) { // Trying to remove one int    
         printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
         return -1;
     }
-    if (down_interruptible(&mutex) != 0) { // Entering critical region
+    if (down_interruptible(&mut) != 0) { // Entering critical region
         printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
         return -1;
     }
     // Entered
-    int couldnt_read = copy_to_user(buffer, bufferQueue, sizeof(int));
+    couldnt_read = copy_to_user(buffer, bufferQueue, sizeof(int));
     if (couldnt_read > 0) {
         printk(KERN_INFO "NUMPIPE: Couldn't read using copy_to_user");
         return -1;
     }
     // Left Shift buffer now by one -- dequeued
-    for (int i = 0; i < (int)full - 1; i++) {
+    for (i = 0; i < currentSize - 1; i++) {
         bufferQueue[i] = bufferQueue[i+1];
     }
-    up(&mutex); // Exiting critical region
+    currentSize -= 1;
+    up(&mut); // Exiting critical region
     up(&empty); // One got read so empty by one more
     return sizeof(int); // if we reached here then sizeof(int) bytes are written into user buffer
 }
 
 static ssize_t num_pipe_write(struct file * filep, const char * buffer, size_t len, loff_t * offset) {
+    int couldnt_write;
+    if (len != sizeof(int)) {
+        printk(KERN_INFO "NUMPIPE: Can only write sizeof(int) no. of bytes");
+        return -1;
+    }
     if (down_interruptible(&empty) != 0) { // Trying to remove one int    
         printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
         return -1;
     }
-    if (down_interruptible(&mutex) != 0) { // Entering critical region
+    if (down_interruptible(&mut) != 0) { // Entering critical region
         printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got EINTR from user
         return -1;
     }
-
-
-
-    return 0;
+    couldnt_write = copy_from_user(bufferQueue + currentSize, buffer, sizeof(int));
+    if (couldnt_write > 0) {
+        printk(KERN_INFO "NUMPIPE: Couldn't read using copy_from_user");
+        return -1;
+    }
+    currentSize += 1;
+    up(&mut);
+    up(&full); // filled one more
+    return sizeof(int);
 }
 
 module_init(num_pipe_init_module);
