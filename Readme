@@ -1,0 +1,18 @@
+Assignment 3 - CS550 - Operating Systems
+
+Task C - Creating a Number Pipe
+
+To compile use make:
+$ make
+$ # make pc will compile producer and consumer
+$ make pc
+
+To load module:
+$ sudo insmod number_pipe.ko bufferSize=100
+
+Then use producer and consumers to test:
+$ ./producer_numbers /dev/numpipe
+$ ./consumer_numbers /dev/numpipe
+
+To unload the module:
+$ sudo rmmod number_pipe
