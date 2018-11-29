@@ -28,7 +28,7 @@ static int currentSize = 0;
 module_param(bufferSize, int, 0);
 
 static int num_pipe_init_module(void);
-// static char * char_devnode(struct device *, umode_t *) {
+static char * char_devnode(struct device *, umode_t *);
 static void num_pipe_exit_module(void);
 static int num_pipe_open(struct inode *, struct file *);
 static int num_pipe_release(struct inode *, struct file *);
@@ -59,20 +59,20 @@ static int __init num_pipe_init_module(void) {
     numpipeClass = class_create(THIS_MODULE, CLASS_NAME);
     if (IS_ERR(numpipeClass)) {                // Check for error and clean up if there is
         unregister_chrdev(majorNumber, DEVICE_NAME);
-        printk(KERN_ALERT "Failed to register device class\n");
+        printk(KERN_ALERT "NUMPIPE: Failed to register device class\n");
         return PTR_ERR(numpipeClass);          // Correct way to return an error on a pointer
     }
-    // numpipeClass->devnode = char_devnode;
+    numpipeClass->devnode = char_devnode;
     printk(KERN_INFO "NUMPIPE: device class registered correctly\n");
     // Register the device driver
     numpipeDevice = device_create(numpipeClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
-    if (IS_ERR(numpipeDevice)){               // Clean up if there is an error
+    if (IS_ERR(numpipeDevice)) {               // Clean up if there is an error
         class_destroy(numpipeClass);           // Repeated code but the alternative is goto statements
         unregister_chrdev(majorNumber, DEVICE_NAME);
-        printk(KERN_ALERT "Failed to create the device\n");
+        printk(KERN_ALERT "NUMPIPE: Failed to create the device\n");
         return PTR_ERR(numpipeDevice);
     }
-    printk(KERN_ALERT "NUMPIPE: device class created correctly\n"); // Made it! device was initialized
+    printk(KERN_INFO "NUMPIPE: device class created correctly\n"); // Made it! device was initialized
     // stuff done
 
     // Module config
@@ -84,16 +84,14 @@ static int __init num_pipe_init_module(void) {
     return 0;
 }
 
-/*
+// this is to set permission of the file so anybody can read or write to it
 static char * char_devnode(struct device * dev, umode_t * mode) {
-        if (!mode)
-                return NULL;
-        if (dev->devt == MKDEV(TTYAUX_MAJOR, 0) ||
-            dev->devt == MKDEV(TTYAUX_MAJOR, 2))
-                * mode = 0666;
+    if (!mode)
         return NULL;
+    if (dev->devt == MKDEV(majorNumber, 0))
+        * mode = 0666;
+    return NULL;
 }
-*/
 
 static void __exit num_pipe_exit_module(void) {
     device_destroy(numpipeClass, MKDEV(majorNumber, 0));
@@ -101,7 +99,7 @@ static void __exit num_pipe_exit_module(void) {
     class_destroy(numpipeClass);
     unregister_chrdev(majorNumber, DEVICE_NAME);
     kfree(bufferQueue);
-    printk(KERN_ALERT "DOBBY IS FREE!");
+    printk(KERN_INFO "NUMPIPE: DOBBY IS FREE!\n");
 }
 
 static int num_pipe_open(struct inode * inodep, struct file * filep) {
@@ -118,21 +116,21 @@ static ssize_t num_pipe_read(struct file * filep, char * buffer, size_t len, lof
     int i = 0;
     int couldnt_read;
     if (len != sizeof(int)) {
-        printk(KERN_INFO "NUMPIPE: Can only read sizeof(int) no. of bytes");
+        printk(KERN_INFO "NUMPIPE: Can only read sizeof(int) no. of bytes\n");
         return -1;
     }
     if (down_interruptible(&full) != 0) { // Trying to remove one int
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
+        printk(KERN_INFO "NUMPIPE: Process Interrupted\n"); // Got -EINTR from user
         return -1;
     }
     if (down_interruptible(&mut) != 0) { // Entering critical region
-        printk(KERN_INFO "NUMPIPE: Process Interrupted"); // Got -EINTR from user
+        printk(KERN_INFO "NUMPIPE: Process Interrupted\n"); // Got -EINTR from user
         return -1;
     }
     // Entered
     couldnt_read = copy_to_user(buffer, bufferQueue, sizeof(int));
     if (couldnt_read > 0) {
-        printk(KERN_INFO "NUMPIPE: Couldn't read using copy_to_user");
+        printk(KERN_WARNING "NUMPIPE: Couldn't read using copy_to_user\n");
         return -1;
     }
     // Left Shift buffer now by one -- dequeued
@@ -161,7 +159,7 @@ static ssize_t num_pipe_write(struct file * filep, const char * buffer, size_t l
     }
     couldnt_write = copy_from_user(bufferQueue + currentSize, buffer, sizeof(int));
     if (couldnt_write > 0) {
-        printk(KERN_INFO "NUMPIPE: Couldn't read using copy_from_user");
+        printk(KERN_WARNING "NUMPIPE: Couldn't read using copy_from_user");
         return -1;
     }
     currentSize += 1;
