@@ -16,3 +16,9 @@ $ ./consumer_numbers /dev/numpipe
 
 To unload the module:
 $ sudo rmmod number_pipe
+
+
+References:
+Relevant docs
+http://derekmolloy.ie/writing-a-linux-kernel-module-part-2-a-character-device/
+http://tldp.org/LDP/lkmpg/2.6/html/x569.html

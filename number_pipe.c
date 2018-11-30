@@ -16,8 +16,9 @@ MODULE_AUTHOR("Vatsal Parekh");
 MODULE_DESCRIPTION("Linux kernel module for numpipe");
 MODULE_VERSION("0.1");
 
-
 // Stuff
+static struct class *  numpipeClass = NULL;
+static struct device * numpipeDevice = NULL;
 struct semaphore mut;
 struct semaphore full;
 struct semaphore empty;
@@ -27,6 +28,7 @@ int bufferSize = 100;
 static int currentSize = 0;
 module_param(bufferSize, int, 0);
 
+// initializations
 static int num_pipe_init_module(void);
 static char * char_devnode(struct device *, umode_t *);
 static void num_pipe_exit_module(void);
@@ -34,8 +36,6 @@ static int num_pipe_open(struct inode *, struct file *);
 static int num_pipe_release(struct inode *, struct file *);
 static ssize_t num_pipe_read(struct file *, char *, size_t, loff_t *);
 static ssize_t num_pipe_write(struct file *, const char *, size_t, loff_t *);
-static struct class *  numpipeClass = NULL;
-static struct device * numpipeDevice = NULL;
 
 // file operations of the character device
 static struct file_operations fops = {
@@ -57,22 +57,22 @@ static int __init num_pipe_init_module(void) {
     printk(KERN_INFO "NUMPIPE: registered major number\n");
     // Register the device class
     numpipeClass = class_create(THIS_MODULE, CLASS_NAME);
-    if (IS_ERR(numpipeClass)) {                // Check for error and clean up if there is
+    if (IS_ERR(numpipeClass)) {
         unregister_chrdev(majorNumber, DEVICE_NAME);
         printk(KERN_ALERT "NUMPIPE: Failed to register device class\n");
-        return PTR_ERR(numpipeClass);          // Correct way to return an error on a pointer
+        return PTR_ERR(numpipeClass);
     }
     numpipeClass->devnode = char_devnode;
     printk(KERN_INFO "NUMPIPE: device class registered correctly\n");
     // Register the device driver
     numpipeDevice = device_create(numpipeClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
-    if (IS_ERR(numpipeDevice)) {               // Clean up if there is an error
-        class_destroy(numpipeClass);           // Repeated code but the alternative is goto statements
+    if (IS_ERR(numpipeDevice)) {        
+        class_destroy(numpipeClass);
         unregister_chrdev(majorNumber, DEVICE_NAME);
         printk(KERN_ALERT "NUMPIPE: Failed to create the device\n");
         return PTR_ERR(numpipeDevice);
     }
-    printk(KERN_INFO "NUMPIPE: device class created correctly\n"); // Made it! device was initialized
+    printk(KERN_INFO "NUMPIPE: device class created correctly\n");
     // stuff done
 
     // Module config
@@ -170,4 +170,3 @@ static ssize_t num_pipe_write(struct file * filep, const char * buffer, size_t l
 
 module_init(num_pipe_init_module);
 module_exit(num_pipe_exit_module);
-
